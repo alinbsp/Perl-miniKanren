@@ -1,0 +1,34 @@
+---
+abstract: 'miniKanren implementation in Perl'
+author:
+  - 'Alin Iacob <alin @ GMAIL COM>'
+build_requires:
+configure_requires:
+dynamic_config: 0
+generated_by: ''
+license: perl
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: '0.1'
+name: miniKanren
+no_index:
+  directory:
+    - t
+    - xt
+    - inc
+    - share
+    - eg
+    - examples
+    - author
+    - builder
+provides:
+  miniKanren:
+    file: lib/miniKanren.pm
+    version: '0.1'
+requires:
+resources:
+  bugtracker: https://github.com/alinbsp/Perl-miniKanren/issues
+  homepage: https://github.com/alinbsp/Perl-miniKanren
+  repository: git@github.com:alinbsp/Perl-miniKanren.git
+version: '0.1'
+x_contributors:
