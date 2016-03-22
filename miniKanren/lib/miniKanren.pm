@@ -2,7 +2,8 @@ use strict;
 use warnings;
 package miniKanren;
 
-use Exporter::Auto;
+use base 'Exporter';
+our @EXPORT_OK = qw(run);
 
 sub run {
 }
