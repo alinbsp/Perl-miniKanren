@@ -3,9 +3,10 @@ use warnings;
 package miniKanren;
 
 use base 'Exporter';
-our @EXPORT_OK = qw(run);
+our @EXPORT = qw(run);
 
 sub run {
+
 }
 
 1;
