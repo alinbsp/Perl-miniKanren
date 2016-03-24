@@ -1,5 +1,6 @@
 use strict;
 use warnings;
+
 package miniKanren;
 
 use base 'Exporter';
@@ -9,8 +10,15 @@ sub run {
 }
 
 sub var {
-  my @var = shift;
-  return @var;
+  my @res = ();
+  if (scalar(@_) > 1) {
+    foreach my $x (@_) {
+      push @res, $x;
+    }
+    return @res;
+  } else {
+    return $_[0];
+  }
 }
 
 1;
