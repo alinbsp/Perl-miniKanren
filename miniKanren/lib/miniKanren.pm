@@ -1,10 +1,11 @@
 use strict;
 use warnings;
+use 5.014;
 
 package miniKanren;
 
 use base 'Exporter';
-our @EXPORT = qw(run var);
+our @EXPORT = qw(run var append);
 
 sub run {
 }
@@ -19,6 +20,10 @@ sub var {
   } else {
     return $_[0];
   }
+}
+
+sub append {
+  return @_;
 }
 
 1;
