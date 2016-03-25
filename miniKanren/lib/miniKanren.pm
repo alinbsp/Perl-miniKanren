@@ -7,6 +7,9 @@ package miniKanren;
 use base 'Exporter';
 our @EXPORT = qw(run var append);
 
+use constant false => 0;
+use constant true => 1;
+
 sub run {
 }
 
@@ -24,6 +27,10 @@ sub var {
 
 sub append {
   return @_;
+}
+
+sub fresh {
+
 }
 
 1;
