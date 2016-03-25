@@ -41,5 +41,8 @@ sub fresh {
   return @fresh;
 }
 
-sub eql {}
+sub eql {
+  my ($u, $v) = @_;
+  my $s = unify($u, $s, $v);
+}
 1;
