@@ -29,6 +29,45 @@ sub append {
   return @_;
 }
 
+sub prepare {
+  my $self = shift;
+  unshift @_, @{$self->{args}} if defined $self->{args} && @{$self->{args}};
+  return @_;
+}
+
+sub reduce {
+  my $self = shift;
+  my ($array, $iterator, $memo, $context) = $self->repare(@_);
+
+  die 'No list or memo' if !defined $array && !defined $memo;
+
+  return $memo unless defined $array;
+
+  my $initial = defined $memo;
+
+  foreach (@$array) {
+      if (!$initial && defined $_) {
+          $memo = $_;
+          $initial = 1;
+      } else {
+          $memo = $iterator->($memo, $_, $context) if defined $_;
+      }
+    }
+    die 'No memo' if !$initial;
+    return $self->_finalize($memo);
+}
+
+sub find_in_pairs {
+  my $self = shift;
+  my ($key, $pairs) = $self->prepare(@_);
+  return reduce($pairs, &{ sub { return $_[1] == $key ? $_[1] : $_[0]} }(), false);
+}
+#xxx
+sub walk {
+  return $_[1] unless (ref $_[0] eq "Array") #xxx This can't be right
+  my $a = find_in_pairs($_[0], $_[1]);
+}
+
 # my $x = fresh();
 # my ($x, $y) = fresh(2);
 sub fresh {
@@ -43,6 +82,7 @@ sub fresh {
 
 sub eql {
   my ($u, $v) = @_;
-  my $s = unify($u, $s, $v);
+    my $s = unify($u, $v, $s);
 }
+
 1;
