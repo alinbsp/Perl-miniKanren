@@ -1,88 +1,280 @@
-use strict;
-use warnings;
-use 5.014;
-
 package miniKanren;
 
-use base 'Exporter';
-our @EXPORT = qw(run var append fresh eql true false);
+use strict;
+use warnings;
+use Exporter 'import';
 
-use constant false => 0;
-use constant true => 1;
+our @EXPORT_OK = qw(
+    var is_var walk ext_s unify
+    succeed fail eq conj disj call_fresh
+);
 
-sub run {
-}
+our $VERSION = '0.01';
 
+# Global counter for fresh variable names.
+my $var_counter = 0;
+
+=head2 var
+
+Generates a fresh logic variable.
+  
+    my $x = var();
+
+=cut
 sub var {
-  my @res = ();
-  if (scalar(@_) > 1) {
-    foreach my $x (@_) {
-      push @res, $x;
-    }
-    return @res;
-  } else {
-    return $_[0];
-  }
+    return "var_" . (++$var_counter);
 }
 
-sub append {
-  return @_;
+=head2 is_var
+
+Checks if a value is a logic variable (a string beginning with "var_").
+
+    if (is_var($x)) { ... }
+
+=cut
+sub is_var {
+    my ($x) = @_;
+    return (ref($x) eq '' && $x =~ /^var_/);
 }
 
-sub prepare {
-  my $self = shift;
-  unshift @_, @{$self->{args}} if defined $self->{args} && @{$self->{args}};
-  return @_;
-}
+=head2 walk
 
-sub reduce {
-  my $self = shift;
-  my ($array, $iterator, $memo, $context) = $self->repare(@_);
+Recursively resolves a term through the substitution.
+  
+    my $val = walk($term, $subs);
 
-  die 'No list or memo' if !defined $array && !defined $memo;
-
-  return $memo unless defined $array;
-
-  my $initial = defined $memo;
-
-  foreach (@$array) {
-      if (!$initial && defined $_) {
-          $memo = $_;
-          $initial = 1;
-      } else {
-          $memo = $iterator->($memo, $_, $context) if defined $_;
-      }
-    }
-    die 'No memo' if !$initial;
-    return $self->_finalize($memo);
-}
-
-sub find_in_pairs {
-  my $self = shift;
-  my ($key, $pairs) = $self->prepare(@_);
-  return reduce($pairs, &{ sub { return $_[1] == $key ? $_[1] : $_[0]} }(), false);
-}
-#xxx
+=cut
 sub walk {
-  return $_[1] unless (ref $_[0] eq "Array") #xxx This can't be right
-  my $a = find_in_pairs($_[0], $_[1]);
+    my ($v, $subs) = @_;
+    while (is_var($v) && exists $subs->{$v}) {
+        $v = $subs->{$v};
+    }
+    return $v;
 }
 
-# my $x = fresh();
-# my ($x, $y) = fresh(2);
-sub fresh {
-  return [] unless $_[0];
+=head2 ext_s
 
-  my @fresh = ();
-  for my $i (1..$_[0]) {
-    push @fresh, [];
-  }
-  return @fresh;
+Extends a substitution with a new mapping.
+
+    my $new_subs = ext_s($var, $val, $subs);
+
+=cut
+sub ext_s {
+    my ($v, $val, $subs) = @_;
+    my %new_subs = %$subs;
+    $new_subs{$v} = $val;
+    return \%new_subs;
 }
 
-sub eql {
-  my ($u, $v) = @_;
-    my $s = unify($u, $v, $s);
+=head2 unify
+
+Attempts to unify two terms under a given substitution.
+  
+    my $new_subs = unify($u, $v, $subs);
+
+=cut
+sub unify {
+    my ($u, $v, $subs) = @_;
+    $u = walk($u, $subs);
+    $v = walk($v, $subs);
+    if (is_var($u) && is_var($v) && $u eq $v) {
+        return $subs;
+    }
+    if (is_var($u)) {
+        return ext_s($u, $v, $subs);
+    }
+    if (is_var($v)) {
+        return ext_s($v, $u, $subs);
+    }
+    # If both are arrays, unify element-wise.
+    if (ref($u) eq 'ARRAY' && ref($v) eq 'ARRAY') {
+        return undef unless @$u == @$v;
+        for (my $i = 0; $i < @$u; $i++) {
+            $subs = unify($u->[$i], $v->[$i], $subs);
+            return undef unless defined $subs;
+        }
+        return $subs;
+    }
+    # Otherwise, check for equality.
+    return ($u eq $v) ? $subs : undef;
 }
 
-1;
+=head2 succeed
+
+A goal that always succeeds and returns the current state.
+
+=cut
+sub succeed {
+    return sub {
+        my ($state) = @_;
+        return [$state];
+    };
+}
+
+=head2 fail
+
+A goal that always fails, returning an empty list.
+
+=cut
+sub fail {
+    return sub {
+        my ($state) = @_;
+        return [];
+    };
+}
+
+=head2 eq
+
+Creates a goal enforcing the equality of two terms.
+
+    my $goal = eq($u, $v);
+
+=cut
+sub eq {
+    my ($u, $v) = @_;
+    return sub {
+        my ($state) = @_;
+        my $subs = unify($u, $v, $state);
+        return defined $subs ? [$subs] : [];
+    };
+}
+
+=head2 conj
+
+Combines two goals using logical AND (conjunction).
+
+    my $goal = conj($goal1, $goal2);
+
+=cut
+sub conj {
+    my ($g1, $g2) = @_;
+    return sub {
+        my ($state) = @_;
+        my $results = [];
+        for my $s (@{ $g1->($state) }) {
+            push @$results, @{ $g2->($s) };
+        }
+        return $results;
+    };
+}
+
+=head2 disj
+
+Combines two goals using logical OR (disjunction).
+
+    my $goal = disj($goal1, $goal2);
+
+=cut
+sub disj {
+    my ($g1, $g2) = @_;
+    return sub {
+        my ($state) = @_;
+        return [ @{ $g1->($state) }, @{ $g2->($state) } ];
+    };
+}
+
+=head2 call_fresh
+
+Introduces a new logic variable into the scope of a goal.
+
+    my $goal = call_fresh(sub {
+        my $x = shift;
+        return eq($x, 5);
+    });
+
+=cut
+sub call_fresh {
+    my ($f) = @_;
+    return sub {
+        my ($state) = @_;
+        my $new_var = var();
+        return $f->($new_var)->($state);
+    };
+}
+
+1;  # End of miniKanren module
+
+__END__
+
+=head1 NAME
+
+miniKanren - A minimal miniKanren-style logic programming library in Perl
+
+=head1 SYNOPSIS
+
+  use miniKanren qw(var eq conj disj call_fresh);
+  
+  # Example: Find X such that X equals either 5 or 6.
+  my $goal = call_fresh(sub {
+      my $x = shift;
+      return disj(eq($x, 5), eq($x, 6));
+  });
+  
+  my $solutions = $goal->({});
+  use Data::Dumper;
+  print Dumper($solutions);
+
+=head1 DESCRIPTION
+
+This module provides a minimal implementation of a miniKanren-style logic programming system in Perl.
+It supports logic variables, unification, and basic goal combinators, which you can extend to suit your needs.
+
+=head1 FUNCTIONS
+
+=over 4
+
+=item var
+
+Generates a fresh logic variable.
+
+=item is_var
+
+Checks if a given value is a logic variable.
+
+=item walk
+
+Resolves a term through the current substitution.
+
+=item ext_s
+
+Extends a substitution with a new binding.
+
+=item unify
+
+Attempts to unify two terms given a substitution.
+
+=item succeed
+
+A goal that always succeeds.
+
+=item fail
+
+A goal that always fails.
+
+=item eq
+
+Creates a goal that enforces the equality of two terms.
+
+=item conj
+
+Combines two goals in a logical AND.
+
+=item disj
+
+Combines two goals in a logical OR.
+
+=item call_fresh
+
+Introduces a fresh logic variable into a goal.
+
+=back
+
+=head1 AUTHOR
+
+Alin Iacob
+
+=head1 LICENSE
+
+This module is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
+
+=cut
